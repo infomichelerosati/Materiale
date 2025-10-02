@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Materiale</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Librerie Aggiuntive -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- Font e Icone -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon-192x192.png">
+    
+    <style>
+        /* Stile di base e customizzazioni */
+        :root {
+            --brand-color: #4f46e5; /* Indigo 600 */
+            --brand-color-light: #e0e7ff; /* Indigo 100 */
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        input[type='number']::-webkit-outer-spin-button,
+        input[type='number']::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type='number'] { -moz-appearance: textfield; }
+
+        .sidebar-link.active {
+            background-color: var(--brand-color);
+            color: white;
+            font-weight: 600;
+        }
+        .dragover {
+            border-color: var(--brand-color);
+            background-color: var(--brand-color-light);
+        }
+        .btn-primary {
+            @apply bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+        }
+        .btn-secondary {
+            @apply bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 dark:text-slate-200 font-bold py-2 px-4 rounded-lg transition-colors;
+        }
+
+        /* Stili per la stampa */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area {
+                display: block !important; /* Assicura che l'elemento sia visualizzato */
+                visibility: visible;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            #print-area * {
+                visibility: visible;
+            }
+            .no-print { display: none !important; }
+        }
+
+        /* Stile per lo scanner QR */
+        #qr-reader {
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300">
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-40 shadow-lg flex flex-col">
+            <div>
+                <div class="p-4 flex items-center justify-between border-b border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="blocks" class="text-indigo-400"></i>
+                        <h2 class="text-xl font-bold text-white">GestMat</h2>
+                    </div>
+                    <button id="close-sidebar-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-700">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div id="credit-box-container" class="px-4 pt-1 pb-2 border-b border-slate-700/50"></div>
+                <nav class="mt-4 p-2">
+                    <a href="#" id="nav-list" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700">
+                        <i data-lucide="layout-list"></i>
+                        Elenco Materiale
+                    </a>
+                    <a href="#" id="nav-form" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700">
+                        <i data-lucide="plus-square"></i>
+                        Aggiungi Materiale
+                    </a>
+                    <a href="#" id="nav-scanner" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700">
+                        <i data-lucide="qr-code"></i>
+                        Scansiona QR
+                    </a>
+                    <a href="#" id="nav-settings" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-700">
+                        <i data-lucide="settings"></i>
+                        Impostazioni
+                    </a>
+                </nav>
+            </div>
+            <div id="sidebar-footer" class="mt-auto p-4 border-t border-slate-700 text-xs text-slate-400 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="flex items-center gap-2 font-medium">
+                        <i data-lucide="package" class="h-4 w-4"></i>
+                        <span>Totale Materiali</span>
+                    </span>
+                    <span id="stats-total-count" class="font-bold text-white bg-slate-700 rounded-full px-2 py-0.5">0</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="flex items-center gap-2 font-medium">
+                        <i data-lucide="database" class="h-4 w-4"></i>
+                        <span>Dimensione Archivio</span>
+                    </span>
+                    <span id="stats-total-size" class="font-bold text-white bg-slate-700 rounded-full px-2 py-0.5">0 KB</span>
+                </div>
+            </div>
+        </aside>
+
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black opacity-50 z-30 hidden md:hidden"></div>
+
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm text-slate-700 dark:text-white p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20">
+                <div class="container mx-auto flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <button id="open-sidebar-btn" class="md:hidden p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <i data-lucide="menu"></i>
+                        </button>
+                        <h1 class="text-xl font-bold hidden md:block">Gestione Materiale Caserma</h1>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                         <button id="theme-toggle" class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none" title="Cambia tema">
+                            <i id="theme-icon-light" data-lucide="sun"></i>
+                            <i id="theme-icon-dark" data-lucide="moon" class="hidden"></i>
+                        </button>
+                        <button id="importBtn" class="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-transform transform hover:scale-105">
+                            <i data-lucide="upload" class="h-4 w-4"></i> Importa
+                        </button>
+                        <input type="file" id="importFile" class="hidden" accept=".zip">
+                        <button id="exportBtn" class="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-transform transform hover:scale-105">
+                             <i data-lucide="download" class="h-4 w-4"></i> Esporta
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Area Principale -->
+            <main class="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div class="container mx-auto">
+                    
+                    <!-- Sezione Elenco (default) -->
+                    <section id="section-list">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                            <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100">Elenco Materiale</h2>
+                            <button id="printListBtn" class="btn-secondary flex items-center gap-2">
+                                <i data-lucide="printer" class="h-4 w-4"></i> Stampa Elenco
+                            </button>
+                        </div>
+                        <!-- Filtri -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                            <div class="relative xl:col-span-1">
+                                 <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400"></i>
+                                 <input type="search" id="searchBar" placeholder="Cerca per denominazione, seriale..." class="pl-10 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white">
+                            </div>
+                            <select id="filterCategoria" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="">Tutte le categorie</option></select>
+                            <select id="filterStato" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="">Tutti gli stati</option></select>
+                            <select id="filterLuogo" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="">Tutti i luoghi</option></select>
+                             <select id="sortBy" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                <option value="denominazione-asc">Ordina per: Nome A-Z</option>
+                                <option value="denominazione-desc">Ordina per: Nome Z-A</option>
+                                <option value="data-new">Ordina per: Più recenti</option>
+                                <option value="data-old">Ordina per: Meno recenti</option>
+                                <option value="quantita-desc">Ordina per: Qtà decrescente</option>
+                                <option value="quantita-asc">Ordina per: Qtà crescente</option>
+                            </select>
+                        </div>
+                        <!-- Elenco Materiale -->
+                        <div id="materialListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+                         <div id="no-results" class="text-center py-16 hidden">
+                            <i data-lucide="folder-search" class="mx-auto h-16 w-16 text-slate-400"></i>
+                            <h3 class="mt-2 text-lg font-medium text-slate-500 dark:text-slate-400">Nessun materiale trovato</h3>
+                            <p class="mt-1 text-sm text-slate-400">Prova a modificare i filtri di ricerca.</p>
+                         </div>
+                    </section>
+
+                    <!-- Sezione Form -->
+                    <section id="section-form" class="hidden">
+                        <h2 class="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-100">Aggiungi/Modifica Materiale</h2>
+                        <form id="materialForm" class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                             <input type="hidden" id="materialId">
+                             <div class="grid grid-cols-1 lg:grid-cols-5 gap-x-8 gap-y-6">
+                                
+                                <div class="lg:col-span-3 space-y-6">
+                                    <!-- Dati Principali -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label for="denominazione" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Denominazione Materiale*</label>
+                                            <input type="text" id="denominazione" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                            <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                        </div>
+                                        <div>
+                                            <label for="categoria" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Categoria Materiale*</label>
+                                            <select id="categoria" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"></select>
+                                            <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div>
+                                            <label for="quantita" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantità*</label>
+                                            <input type="number" id="quantita" value="1" min="1" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white text-center">
+                                            <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                        </div>
+                                        <div>
+                                            <label for="stato" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Stato d'uso*</label>
+                                            <select id="stato" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"></select>
+                                            <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                        </div>
+                                        <div>
+                                            <label for="luogo" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Luogo*</label>
+                                            <select id="luogo" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"></select>
+                                            <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                        </div>
+                                    </div>
+
+                                    <hr class="border-slate-200 dark:border-slate-700">
+                                     <h3 class="text-md font-medium text-slate-900 dark:text-slate-100 col-span-full -mb-2">Dettagli Pratica</h3>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                       <div>
+                                            <label for="protocollo" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Numero Protocollo</label>
+                                            <input type="text" id="protocollo" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        </div>
+                                        <div>
+                                            <label for="dataArrivo" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Arrivo</label>
+                                            <input type="date" id="dataArrivo" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        </div>
+                                        <div>
+                                            <label for="numeroPratica" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Numero Pratica</label>
+                                            <input type="text" id="numeroPratica" placeholder="xx-xx-xx" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        </div>
+                                        <div>
+                                            <label for="annoPratica" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Anno Pratica</label>
+                                            <input type="number" id="annoPratica" placeholder="YYYY" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="lg:col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Immagine</label>
+                                    <div class="relative group mt-1 w-full mx-auto lg:mx-0">
+                                        <div id="imageUploader" class="w-full max-w-xs bg-slate-50 dark:bg-slate-700 rounded-md flex justify-center items-center border-2 border-slate-300 dark:border-slate-600 border-dashed cursor-pointer relative overflow-hidden hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors duration-300 ease-in-out aspect-[9/16]">
+                                            <input type="file" id="imageFile" class="hidden" accept="image/*">
+                                            <img id="imagePreview" src="" class="hidden absolute inset-0 w-full h-full object-contain p-1">
+                                            <div id="imagePlaceholder" class="space-y-1 text-center px-2 pointer-events-none">
+                                                <i data-lucide="image-up" class="mx-auto h-12 w-12 text-slate-400"></i>
+                                                <p class="text-sm text-slate-600 dark:text-slate-400">Carica Immagine</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-500">Verticale o Orizzontale</p>
+                                            </div>
+                                             <div id="resize-handle" class="absolute bottom-0 right-0 w-4 h-4 bg-slate-400/50 dark:bg-slate-900/50 cursor-nwse-resize z-20" style="border-top-left-radius: 4px;"></div>
+                                        </div>
+                                        <div id="image-buttons" class="absolute top-2 right-2 z-10 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <button type="button" id="rotateImageBtn" class="hidden bg-slate-700/50 text-white backdrop-blur-sm rounded-full h-8 w-8 flex items-center justify-center text-sm hover:bg-slate-700/75" title="Ruota box"><i data-lucide="rotate-cw" class="h-4 w-4"></i></button>
+                                            <button type="button" id="removeImageBtn" class="hidden bg-red-600/80 text-white backdrop-blur-sm rounded-full h-8 w-8 flex items-center justify-center text-sm hover:bg-red-600" title="Rimuovi immagine"><i data-lucide="x" class="h-5 w-5"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="lg:col-span-5">
+                                    <hr class="border-slate-200 dark:border-slate-700">
+                                    <h3 class="text-md font-medium text-slate-900 dark:text-slate-100 mt-6 -mb-2">Dettagli Aggiuntivi</h3>
+                                </div>
+
+                                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label for="seriale" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Numero Seriale</label>
+                                        <input type="text" id="seriale" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label for="provenienza" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Provenienza</label>
+                                        <input type="text" id="provenienza" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="dotazione" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Dotazione</label>
+                                        <input type="text" id="dotazione" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label for="dataConsegna" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Consegna</label>
+                                        <input type="date" id="dataConsegna" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                    </div>
+                                    <div>
+                                        <label for="dataUso" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Messa in Uso</label>
+                                        <input type="date" id="dataUso" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                        <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                    </div>
+                                </div>
+                                
+                                <div class="lg:col-span-5">
+                                    <div id="dynamic-fields-container" class="contents">
+                                         <div id="informatica-fields" class="hidden space-y-6">
+                                             <hr class="border-slate-200 dark:border-slate-700">
+                                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                 <h3 class="text-md font-medium text-slate-900 dark:text-slate-100 md:col-span-2 lg:col-span-3">Dettagli Informatica</h3>
+                                                 <div>
+                                                     <label for="macAddress" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">MAC Address</label>
+                                                     <input type="text" id="macAddress" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         <div id="veicoli-fields" class="hidden space-y-6">
+                                             <hr class="border-slate-200 dark:border-slate-700">
+                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <h3 class="text-md font-medium text-slate-900 dark:text-slate-100 md:col-span-2">Dettagli Veicolo</h3>
+                                                <div>
+                                                    <label for="targa" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Targa</label>
+                                                    <input type="text" id="targa" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                                </div>
+                                                <div>
+                                                    <label for="chilometraggio" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Chilometraggio</label>
+                                                    <input type="number" id="chilometraggio" min="0" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                                    <p class="text-xs text-red-500 mt-1 error-message hidden"></p>
+                                                </div>
+                                             </div>
+                                         </div>
+                                         <div id="armamento-fields" class="hidden space-y-6">
+                                              <hr class="border-slate-200 dark:border-slate-700">
+                                              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                 <h3 class="text-md font-medium text-slate-900 dark:text-slate-100 md:col-span-2 lg:col-span-3">Dettagli Armamento</h3>
+                                                 <div>
+                                                     <label for="matricolaArma" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Matricola Arma</label>
+                                                     <input type="text" id="matricolaArma" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                                 </div>
+                                              </div>
+                                         </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="lg:col-span-5">
+                                    <hr class="border-slate-200 dark:border-slate-700 mt-6">
+                                </div>
+
+                                <div class="lg:col-span-5">
+                                    <label for="note" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Note</label>
+                                    <textarea id="note" rows="3" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"></textarea>
+                                </div>
+
+                                <div class="lg:col-span-5">
+                                    <h3 class="text-md font-medium text-slate-900 dark:text-slate-100">Allegati</h3>
+                                    <div id="attachments-container" class="mt-2 space-y-2"></div>
+                                    <div id="new-attachments-container" class="mt-2 space-y-2"></div>
+                                    <div id="attachment-drop-zone" class="mt-4 p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-center transition-colors group">
+                                        <div class="flex flex-col items-center justify-center pointer-events-none">
+                                            <i data-lucide="upload-cloud" class="h-10 w-10 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+                                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Trascina i file qui</p>
+                                        </div>
+                                    </div>
+                                    <button type="button" id="addAttachmentBtn" class="mt-4 text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium flex items-center gap-1">
+                                        <i data-lucide="paperclip" class="h-4 w-4"></i> O aggiungi un allegato manualmente
+                                    </button>
+                                </div>
+
+                                <div class="lg:col-span-5 flex justify-end gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <button type="button" id="clearBtn" class="btn-secondary">Pulisci Campi</button>
+                                    <button type="submit" id="saveBtn" class="btn-primary">Salva Materiale</button>
+                                </div>
+                             </div>
+                        </form>
+                    </section>
+                    
+                    <!-- Sezione Scanner QR -->
+                    <section id="section-scanner" class="hidden">
+                         <h2 class="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-100">Scansiona QR Code</h2>
+                         <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md max-w-xl mx-auto">
+                            <div id="qr-reader" class="w-full"></div>
+                            <div id="qr-reader-results" class="mt-4 text-center"></div>
+                             <button id="stop-scan-btn" class="hidden mt-4 mx-auto btn-secondary">Interrompi Scansione</button>
+                         </div>
+                    </section>
+
+                    <!-- Sezione Impostazioni -->
+                    <section id="section-settings" class="hidden">
+                         <h2 class="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-100">Impostazioni</h2>
+                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Gestione Categorie, Stati, Luoghi -->
+                            <div id="settings-card-categories" class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"></div>
+                            <div id="settings-card-states" class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"></div>
+                            <div id="settings-card-locations" class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"></div>
+                         </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Modali -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-sm"></div>
+    
+    <!-- Modale Conferma -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="confirm-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Conferma Azione</h3>
+            <p id="confirm-message" class="mt-2 text-sm text-slate-500 dark:text-slate-400">Sei sicuro di voler procedere?</p>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="confirm-cancel" class="btn-secondary">Annulla</button>
+                <button id="confirm-ok" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Dettaglio Materiale -->
+    <div id="detail-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div id="detail-modal-content" class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b dark:border-slate-700 flex justify-between items-center">
+                <h3 id="detail-title" class="text-xl font-bold text-slate-900 dark:text-slate-100">Dettaglio Materiale</h3>
+                <button id="detail-close-btn" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">
+                    <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+            </div>
+            <div id="detail-body" class="p-6 overflow-y-auto">
+                <!-- Contenuto dinamico -->
+            </div>
+            <div class="p-4 border-t dark:border-slate-700 flex justify-between items-center">
+                <div class="flex gap-3">
+                    <button id="show-qrcode-btn" class="btn-secondary flex items-center gap-2">
+                        <i data-lucide="qr-code" class="h-4 w-4"></i> Mostra QR
+                    </button>
+                     <button id="printCardBtn" class="btn-secondary flex items-center gap-2">
+                        <i data-lucide="printer" class="h-4 w-4"></i> Stampa Scheda
+                    </button>
+                </div>
+                <button id="detail-close-btn-footer" class="btn-primary">Chiudi</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modale QR Code -->
+    <div id="qrcode-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+            <h3 id="qrcode-title" class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">QR Code</h3>
+            <div id="qrcode-container" class="flex justify-center"></div>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Scansiona per aprire la scheda.</p>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="qrcode-print-btn" class="btn-secondary flex items-center gap-2 no-print"><i data-lucide="printer" class="h-4 w-4"></i> Stampa</button>
+                <button id="qrcode-close-btn" class="btn-primary no-print">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Modifica Impostazione -->
+    <div id="edit-setting-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="edit-setting-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Modifica Voce</h3>
+            <div class="mt-4">
+                <label for="edit-setting-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nuovo nome</label>
+                <input type="text" id="edit-setting-input" class="w-full rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white" required>
+                <input type="hidden" id="edit-setting-id">
+                <input type="hidden" id="edit-setting-type">
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="edit-setting-cancel" class="btn-secondary">Annulla</button>
+                <button id="edit-setting-save" class="btn-primary">Salva</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notifica Toast -->
+    <div id="notification" class="fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg z-50 opacity-0 translate-y-4 transition-all duration-300">
+        <p id="notification-message"></p>
+    </div>
+
+    <!-- Contenitore per la stampa -->
+    <div id="print-area" class="hidden"></div>
+
+
+    <script type="module">
+        // SERVICE WORKER REGISTRATION
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                  .then(reg => console.log('Service Worker registrato con successo.', reg))
+                  .catch(err => console.error('Errore durante la registrazione del Service Worker:', err));
+            });
+        }
+
+        // --- THEME MANAGER ---
+        const ThemeManager = {
+            themeToggleBtn: document.getElementById('theme-toggle'),
+            lightIcon: document.getElementById('theme-icon-light'),
+            darkIcon: document.getElementById('theme-icon-dark'),
+            init() {
+                this.themeToggleBtn.addEventListener('click', () => this.toggleTheme());
+                this.applyTheme(this.getTheme());
+            },
+            getTheme() {
+                return localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            },
+            applyTheme(theme) {
+                document.documentElement.classList.toggle('dark', theme === 'dark');
+                this.lightIcon.classList.toggle('hidden', theme === 'dark');
+                this.darkIcon.classList.toggle('hidden', theme !== 'dark');
+            },
+            toggleTheme() {
+                const newTheme = this.getTheme() === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme', newTheme);
+                this.applyTheme(newTheme);
+            }
+        };
+
+        // --- DATABASE MANAGER ---
+        const dbManager = {
+            db: null,
+            init() {
+                return new Promise((resolve, reject) => {
+                    // Increased DB version to handle schema update
+                    const request = indexedDB.open('GestioneMaterialeDB', 4);
+                    request.onerror = event => reject("Errore IndexedDB: " + event.target.errorCode);
+                    request.onsuccess = event => { this.db = event.target.result; resolve(); };
+                    request.onupgradeneeded = event => {
+                        const db = event.target.result;
+                        
+                        // Main store for materials
+                        if (!db.objectStoreNames.contains('materiali')) {
+                            const materialStore = db.createObjectStore('materiali', { keyPath: 'id' });
+                            materialStore.createIndex('createdAt', 'createdAt', { unique: false });
+                        } else {
+                            const materialStore = event.target.transaction.objectStore('materiali');
+                            if (!materialStore.indexNames.contains('createdAt')) {
+                                materialStore.createIndex('createdAt', 'createdAt', { unique: false });
+                            }
+                        }
+
+                        // Stores for settings
+                        const settingsStores = ['categories', 'states', 'locations'];
+                        settingsStores.forEach(s => {
+                            if (!db.objectStoreNames.contains(s)) {
+                                db.createObjectStore(s, { keyPath: 'id' });
+                            }
+                        });
+                    };
+                });
+            },
+            async saveData(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([storeName], 'readwrite');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = event => reject(event.target.error);
+                    tx.objectStore(storeName).put(data);
+                });
+            },
+            async getAllData(storeName) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([storeName], 'readonly');
+                    const request = tx.objectStore(storeName).getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = event => reject(event.target.error);
+                });
+            },
+            async deleteData(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([storeName], 'readwrite');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = event => reject(event.target.error);
+                    tx.objectStore(storeName).delete(id);
+                });
+            },
+            async clearStore(storeName) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([storeName], 'readwrite');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = event => reject(event.target.error);
+                    tx.objectStore(storeName).clear();
+                });
+            }
+        };
+
+        // --- UI MANAGER ---
+        const UIManager = {
+            // Sezioni & Nav
+            sections: document.querySelectorAll('main section'),
+            navLinks: document.querySelectorAll('.sidebar-link'),
+            sidebar: document.getElementById('sidebar'),
+            sidebarOverlay: document.getElementById('sidebar-overlay'),
+            openSidebarBtn: document.getElementById('open-sidebar-btn'),
+            closeSidebarBtn: document.getElementById('close-sidebar-btn'),
+            
+            // UI Globale
+            materialListContainer: document.getElementById('materialListContainer'),
+            noResults: document.getElementById('no-results'),
+            
+            // Filtri e Stampa
+            searchBar: document.getElementById('searchBar'),
+            filterCategoria: document.getElementById('filterCategoria'),
+            filterStato: document.getElementById('filterStato'),
+            filterLuogo: document.getElementById('filterLuogo'),
+            sortBy: document.getElementById('sortBy'),
+            printListBtn: document.getElementById('printListBtn'),
+            printCardBtn: document.getElementById('printCardBtn'),
+            
+            // Form Materiale
+            form: document.getElementById('materialForm'),
+            materialId: document.getElementById('materialId'),
+            denominazione: document.getElementById('denominazione'),
+            categoria: document.getElementById('categoria'),
+            quantita: document.getElementById('quantita'),
+            stato: document.getElementById('stato'),
+            luogo: document.getElementById('luogo'),
+            protocollo: document.getElementById('protocollo'),
+            dataArrivo: document.getElementById('dataArrivo'),
+            numeroPratica: document.getElementById('numeroPratica'),
+            annoPratica: document.getElementById('annoPratica'),
+            seriale: document.getElementById('seriale'),
+            provenienza: document.getElementById('provenienza'),
+            dataConsegna: document.getElementById('dataConsegna'),
+            dataUso: document.getElementById('dataUso'),
+            dotazione: document.getElementById('dotazione'),
+            note: document.getElementById('note'),
+            imageUploader: document.getElementById('imageUploader'),
+            imageFile: document.getElementById('imageFile'),
+            imagePreview: document.getElementById('imagePreview'),
+            imagePlaceholder: document.getElementById('imagePlaceholder'),
+            removeImageBtn: document.getElementById('removeImageBtn'),
+            rotateImageBtn: document.getElementById('rotateImageBtn'),
+            informaticaFields: document.getElementById('informatica-fields'),
+            veicoliFields: document.getElementById('veicoli-fields'),
+            armamentoFields: document.getElementById('armamento-fields'),
+            macAddress: document.getElementById('macAddress'),
+            targa: document.getElementById('targa'),
+            chilometraggio: document.getElementById('chilometraggio'),
+            matricolaArma: document.getElementById('matricolaArma'),
+            addAttachmentBtn: document.getElementById('addAttachmentBtn'),
+            newAttachmentsContainer: document.getElementById('new-attachments-container'),
+            attachmentsContainer: document.getElementById('attachments-container'),
+            clearBtn: document.getElementById('clearBtn'),
+            attachmentDropZone: document.getElementById('attachment-drop-zone'),
+            resizeHandle: document.getElementById('resize-handle'),
+
+            // Impostazioni
+            settingsCards: {
+                categories: document.getElementById('settings-card-categories'),
+                states: document.getElementById('settings-card-states'),
+                locations: document.getElementById('settings-card-locations'),
+            },
+            
+            // Import/Export
+            importBtn: document.getElementById('importBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            importFile: document.getElementById('importFile'),
+
+            // Modali & Notifiche
+            modalBackdrop: document.getElementById('modal-backdrop'),
+            confirmModal: document.getElementById('confirm-modal'),
+            confirmTitle: document.getElementById('confirm-title'),
+            confirmMessage: document.getElementById('confirm-message'),
+            confirmOk: document.getElementById('confirm-ok'),
+            confirmCancel: document.getElementById('confirm-cancel'),
+            detailModal: document.getElementById('detail-modal'),
+            detailTitle: document.getElementById('detail-title'),
+            detailBody: document.getElementById('detail-body'),
+            detailCloseBtn: document.getElementById('detail-close-btn'),
+            editSettingModal: document.getElementById('edit-setting-modal'),
+            editSettingTitle: document.getElementById('edit-setting-title'),
+            editSettingInput: document.getElementById('edit-setting-input'),
+            editSettingId: document.getElementById('edit-setting-id'),
+            editSettingType: document.getElementById('edit-setting-type'),
+            editSettingSaveBtn: document.getElementById('edit-setting-save'),
+            editSettingCancelBtn: document.getElementById('edit-setting-cancel'),
+            notification: document.getElementById('notification'),
+            notificationMessage: document.getElementById('notification-message'),
+            printArea: document.getElementById('print-area'),
+            statsTotalCount: document.getElementById('stats-total-count'),
+            statsTotalSize: document.getElementById('stats-total-size'),
+
+            // QR Code
+            qrReader: document.getElementById('qr-reader'),
+            stopScanBtn: document.getElementById('stop-scan-btn'),
+            showQrCodeBtn: document.getElementById('show-qrcode-btn'),
+            qrCodeModal: document.getElementById('qrcode-modal'),
+            qrCodeContainer: document.getElementById('qrcode-container'),
+            qrCodeTitle: document.getElementById('qrcode-title'),
+            qrCodeCloseBtn: document.getElementById('qrcode-close-btn'),
+            qrCodePrintBtn: document.getElementById('qrcode-print-btn'),
+            html5QrCode: null,
+            
+            // Stato
+            allMaterials: [],
+            filteredMaterials: [],
+            settingsData: { categories: [], states: [], locations: [] },
+            currentPreviewUrl: null,
+
+            init() {
+                // Inizializza icone
+                lucide.createIcons();
+                
+                // Navigazione
+                this.openSidebarBtn.addEventListener('click', () => this.toggleSidebar(true));
+                this.closeSidebarBtn.addEventListener('click', () => this.toggleSidebar(false));
+                this.sidebarOverlay.addEventListener('click', () => this.toggleSidebar(false));
+                this.navLinks.forEach(link => {
+                    link.addEventListener('click', e => {
+                        e.preventDefault();
+                        const targetId = `section-${link.id.split('-')[1]}`;
+                        this.showView(targetId);
+                        this.toggleSidebar(false);
+                        if (link.id === 'nav-form' && !this.materialId.value) this.clearForm();
+                    });
+                });
+                
+                // Form Materiale
+                this.categoria.addEventListener('change', () => this.toggleDynamicFields());
+                this.form.addEventListener('submit', (e) => { e.preventDefault(); App.saveMaterial(); });
+                this.clearBtn.addEventListener('click', () => this.clearForm());
+                this.addAttachmentBtn.addEventListener('click', () => this.addAttachmentField());
+
+                // Image Uploader
+                this.imageUploader.addEventListener('click', () => this.imageFile.click());
+                this.imageFile.addEventListener('change', (e) => App.handleImageUpload(e.target.files[0]));
+                this.imageUploader.addEventListener('dragover', e => { e.preventDefault(); this.imageUploader.classList.add('dragover'); });
+                this.imageUploader.addEventListener('dragleave', e => { this.imageUploader.classList.remove('dragover'); });
+                this.imageUploader.addEventListener('drop', e => {
+                    e.preventDefault();
+                    this.imageUploader.classList.remove('dragover');
+                    if (e.dataTransfer.files[0]) App.handleImageUpload(e.dataTransfer.files[0]);
+                });
+                this.removeImageBtn.addEventListener('click', (e) => { e.stopPropagation(); App.removeImage(); });
+                this.rotateImageBtn.addEventListener('click', (e) => { e.stopPropagation(); App.rotateImage(); });
+                this.resizeHandle.addEventListener('mousedown', this.initResize.bind(this));
+
+                // Attachments Drag & Drop
+                this.attachmentDropZone.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    this.attachmentDropZone.classList.add('dragover');
+                });
+                this.attachmentDropZone.addEventListener('dragleave', e => {
+                    this.attachmentDropZone.classList.remove('dragover');
+                });
+                this.attachmentDropZone.addEventListener('drop', e => {
+                    e.preventDefault();
+                    this.attachmentDropZone.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        App.addDroppedFiles(e.dataTransfer.files);
+                    }
+                });
+
+
+                // Filtri e stampa
+                this.searchBar.addEventListener('input', () => this.filterAndRender());
+                this.filterCategoria.addEventListener('change', () => this.filterAndRender());
+                this.filterStato.addEventListener('change', () => this.filterAndRender());
+                this.filterLuogo.addEventListener('change', () => this.filterAndRender());
+                this.sortBy.addEventListener('change', () => this.filterAndRender());
+                this.printListBtn.addEventListener('click', () => App.printList());
+                
+                // Modali
+                this.modalBackdrop.addEventListener('click', () => this.closeAllModals());
+                this.confirmCancel.addEventListener('click', () => this.closeConfirmModal());
+                this.detailCloseBtn.addEventListener('click', () => this.closeDetailModal());
+                document.getElementById('detail-close-btn-footer').addEventListener('click', () => this.closeDetailModal());
+                this.editSettingSaveBtn.addEventListener('click', () => {
+                    App.updateSettingItem(
+                        this.editSettingType.value,
+                        this.editSettingId.value,
+                        this.editSettingInput.value
+                    );
+                });
+                this.editSettingCancelBtn.addEventListener('click', () => this.closeEditSettingModal());
+                this.showQrCodeBtn.addEventListener('click', () => App.generateAndShowQRCode());
+                this.qrCodeCloseBtn.addEventListener('click', () => this.closeQrCodeModal());
+                this.qrCodePrintBtn.addEventListener('click', () => App.printQRCode());
+                
+                // QR Scanner
+                this.stopScanBtn.addEventListener('click', () => this.stopScanner());
+
+                // Import/Export
+                this.importBtn.addEventListener('click', () => this.importFile.click());
+                this.importFile.addEventListener('change', (e) => App.importData(e));
+                this.exportBtn.addEventListener('click', () => App.exportData());
+            },
+
+            toggleSidebar(show) {
+                this.sidebar.classList.toggle('-translate-x-full', !show);
+                this.sidebarOverlay.classList.toggle('hidden', !show);
+            },
+
+            showView(targetId) {
+                this.sections.forEach(s => s.classList.toggle('hidden', s.id !== targetId));
+                this.navLinks.forEach(l => {
+                    const linkTarget = `section-${l.id.split('-')[1]}`;
+                    l.classList.toggle('active', linkTarget === targetId);
+                });
+                
+                if (targetId === 'section-scanner') {
+                    this.startScanner();
+                } else {
+                    this.stopScanner();
+                }
+                window.scrollTo(0, 0);
+            },
+
+            renderList(materials) {
+                this.materialListContainer.innerHTML = '';
+                this.noResults.classList.toggle('hidden', materials.length > 0);
+                materials.forEach(m => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white dark:bg-slate-800 rounded-xl shadow-md flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:-translate-y-1';
+                    
+                    let imageUrl = m.image ? URL.createObjectURL(m.image) : `https://placehold.co/400x300/e2e8f0/94a3b8?text=${encodeURIComponent(m.denominazione)}`;
+                    
+                    card.innerHTML = `
+                        <div class="relative">
+                            <img src="${imageUrl}" class="w-full h-40 object-cover rounded-t-xl" alt="Immagine di ${m.denominazione}" onerror="this.onerror=null;this.src='https://placehold.co/400x300/e2e8f0/94a3b8?text=Immagine+non+disponibile';">
+                             <div class="absolute top-2 right-2"><span class="text-xs font-semibold inline-block py-1 px-3 uppercase rounded-full ${this.getStatusColor(m.stato)}">${m.stato}</span></div>
+                        </div>
+                        <div class="p-4 flex-grow">
+                            <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">${m.categoria}</p>
+                            <h3 class="font-bold text-lg text-slate-800 dark:text-slate-100 mt-1 truncate" title="${m.denominazione}">${m.denominazione}</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">S/N: <strong>${m.seriale || 'N/D'}</strong></p>
+                            <p class="text-sm text-slate-600 dark:text-slate-300">Luogo: <strong>${m.luogo}</strong></p>
+                        </div>
+                        <div class="flex justify-end gap-1 p-3 border-t dark:border-slate-700">
+                            <button data-id="${m.id}" class="view-btn text-indigo-500 hover:bg-indigo-100 dark:hover:bg-slate-700 p-2 rounded-full" title="Vedi Dettagli"><i data-lucide="eye" class="h-5 w-5"></i></button>
+                            <button data-id="${m.id}" class="edit-btn text-amber-500 hover:bg-amber-100 dark:hover:bg-slate-700 p-2 rounded-full" title="Modifica"><i data-lucide="file-pen-line" class="h-5 w-5"></i></button>
+                            <button data-id="${m.id}" class="delete-btn text-red-500 hover:bg-red-100 dark:hover:bg-slate-700 p-2 rounded-full" title="Elimina"><i data-lucide="trash-2" class="h-5 w-5"></i></button>
+                        </div>
+                    `;
+                    this.materialListContainer.appendChild(card);
+                });
+                
+                document.querySelectorAll('.view-btn').forEach(b => b.addEventListener('click', e => this.showDetailModal(e.currentTarget.dataset.id)));
+                document.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', e => App.editMaterial(e.currentTarget.dataset.id)));
+                document.querySelectorAll('.delete-btn').forEach(b => b.addEventListener('click', e => App.deleteMaterial(e.currentTarget.dataset.id)));
+                
+                lucide.createIcons();
+            },
+
+            filterAndRender() {
+                const searchTerm = this.searchBar.value.toLowerCase();
+                const category = this.filterCategoria.value;
+                const status = this.filterStato.value;
+                const location = this.filterLuogo.value;
+                const sort = this.sortBy.value;
+
+                let materials = [...this.allMaterials];
+
+                materials = materials.filter(m => 
+                    (searchTerm === '' || m.denominazione.toLowerCase().includes(searchTerm) || (m.seriale && m.seriale.toLowerCase().includes(searchTerm))) &&
+                    (category === '' || m.categoria === category) &&
+                    (status === '' || m.stato === status) &&
+                    (location === '' || m.luogo === location)
+                );
+
+                // Sorting logic
+                switch(sort) {
+                    case 'denominazione-asc': materials.sort((a,b) => a.denominazione.localeCompare(b.denominazione)); break;
+                    case 'denominazione-desc': materials.sort((a,b) => b.denominazione.localeCompare(a.denominazione)); break;
+                    case 'data-new': materials.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); break;
+                    case 'data-old': materials.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
+                    case 'quantita-asc': materials.sort((a,b) => a.quantita - b.quantita); break;
+                    case 'quantita-desc': materials.sort((a,b) => b.quantita - a.quantita); break;
+                }
+                
+                this.filteredMaterials = materials;
+                this.renderList(this.filteredMaterials);
+            },
+            
+            getStatusColor(status) {
+                const colors = {
+                    'Nuovo': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+                    'In uso': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                    'Inefficiente': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+                    'Dismesso': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+                    'In riparazione': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                };
+                return colors[status] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+            },
+            
+            populateDropdowns() {
+                const populate = (select, data, placeholder = null) => {
+                    const currentValue = select.value;
+                    select.innerHTML = '';
+                    if (placeholder) select.innerHTML += `<option value="">${placeholder}</option>`;
+                    data.sort((a,b) => a.name.localeCompare(b.name)).forEach(item => {
+                        select.innerHTML += `<option value="${item.name}">${item.name}</option>`;
+                    });
+                    if ([...select.options].some(o => o.value === currentValue)) {
+                        select.value = currentValue;
+                    } else if (placeholder) {
+                        select.value = "";
+                    }
+                };
+                populate(this.categoria, this.settingsData.categories);
+                populate(this.stato, this.settingsData.states);
+                populate(this.luogo, this.settingsData.locations);
+                populate(this.filterCategoria, this.settingsData.categories, 'Tutte le categorie');
+                populate(this.filterStato, this.settingsData.states, 'Tutti gli stati');
+                populate(this.filterLuogo, this.settingsData.locations, 'Tutti i luoghi');
+            },
+            
+            renderSettings() {
+                 const settingsMeta = {
+                    categories: { title: 'Categorie', icon: 'grip' },
+                    states: { title: 'Stati d\'uso', icon: 'toggle-right' },
+                    locations: { title: 'Luoghi', icon: 'map-pin' }
+                };
+
+                for (const key in this.settingsData) {
+                    const card = this.settingsCards[key];
+                    card.innerHTML = `
+                        <h3 class="font-bold text-lg mb-4 text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <i data-lucide="${settingsMeta[key].icon}"></i> ${settingsMeta[key].title}
+                        </h3>
+                        <form id="form-${key}" class="flex gap-2 mb-4">
+                            <input type="text" id="input-${key}" placeholder="Nuova voce..." class="flex-grow rounded-md border-slate-300 shadow-sm sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white" required>
+                            <button type="submit" class="bg-indigo-600 text-white p-2 rounded-lg text-sm flex-shrink-0"><i data-lucide="plus" class="h-5 w-5"></i></button>
+                        </form>
+                        <ul id="list-${key}" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                    `;
+                    
+                    const listEl = card.querySelector(`#list-${key}`);
+                    this.settingsData[key].sort((a,b) => a.name.localeCompare(b.name)).forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'flex items-center justify-between text-sm p-2 bg-slate-100 dark:bg-slate-700 rounded-md';
+                        li.innerHTML = `
+                            <span class="text-slate-800 dark:text-slate-200 flex-grow truncate pr-2">${item.name}</span>
+                            <div class="flex items-center flex-shrink-0">
+                                <button data-id="${item.id}" data-type="${key}" class="edit-setting-btn text-amber-500 hover:text-amber-700 p-1 rounded-full hover:bg-amber-100 dark:hover:bg-slate-600" title="Modifica">
+                                    <i data-lucide="file-pen-line" class="h-4 w-4"></i>
+                                </button>
+                                <button data-id="${item.id}" data-type="${key}" class="delete-setting-btn text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100 dark:hover:bg-slate-600" title="Elimina"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                            </div>
+                        `;
+                        listEl.appendChild(li);
+                    });
+                }
+                
+                document.querySelectorAll('form[id^="form-"]').forEach(form => {
+                    form.addEventListener('submit', e => {
+                        e.preventDefault();
+                        const type = e.target.id.split('-')[1];
+                        const input = e.target.querySelector(`input[id^="input-"]`);
+                        App.addSettingItem(type, input.value);
+                        input.value = '';
+                    });
+                });
+
+                document.querySelectorAll('.delete-setting-btn').forEach(btn => btn.addEventListener('click', e => {
+                    const { id, type } = e.currentTarget.dataset;
+                    App.deleteSettingItem(type, id);
+                }));
+                 document.querySelectorAll('.edit-setting-btn').forEach(btn => btn.addEventListener('click', e => {
+                    const { id, type } = e.currentTarget.dataset;
+                    const item = this.settingsData[type].find(i => i.id === id);
+                    if (item) this.showEditSettingModal(type, id, item.name);
+                }));
+                
+                lucide.createIcons();
+            },
+
+            toggleDynamicFields() {
+                this.informaticaFields.classList.add('hidden');
+                this.veicoliFields.classList.add('hidden');
+                this.armamentoFields.classList.add('hidden');
+                switch (this.categoria.value) {
+                    case 'Informatica': this.informaticaFields.classList.remove('hidden'); break;
+                    case 'Veicoli': this.veicoliFields.classList.remove('hidden'); break;
+                    case 'Armamento': this.armamentoFields.classList.remove('hidden'); break;
+                }
+            },
+
+            applyImageOrientation(orientation) {
+                this.imageUploader.classList.remove('aspect-[9/16]', 'aspect-[16/9]');
+                if (orientation === 'vertical') {
+                    this.imageUploader.classList.add('aspect-[9/16]');
+                } else {
+                    this.imageUploader.classList.add('aspect-[16/9]');
+                }
+            },
+
+            updateImagePreview(file, orientation = 'vertical') {
+                if (this.currentPreviewUrl) {
+                    URL.revokeObjectURL(this.currentPreviewUrl);
+                    this.currentPreviewUrl = null;
+                }
+                const hasImage = !!file;
+                if (hasImage) {
+                    this.currentPreviewUrl = URL.createObjectURL(file);
+                    this.imagePreview.src = this.currentPreviewUrl;
+                }
+                this.imagePreview.classList.toggle('hidden', !hasImage);
+                this.imagePlaceholder.classList.toggle('hidden', hasImage);
+                this.removeImageBtn.classList.toggle('hidden', !hasImage);
+                this.rotateImageBtn.classList.toggle('hidden', !hasImage);
+                this.applyImageOrientation(orientation);
+            },
+
+            clearForm() {
+                this.form.reset();
+                this.materialId.value = '';
+                this.toggleDynamicFields();
+                this.newAttachmentsContainer.innerHTML = '';
+                this.attachmentsContainer.innerHTML = '';
+                this.clearValidationErrors();
+                
+                // Reset image resizer state
+                this.imageUploader.style.width = '';
+                this.imageUploader.style.height = '';
+                this.imageUploader.classList.add('max-w-xs');
+                App.currentImageDimensions = { width: null, height: null };
+                
+                App.removeImage();
+                this.imageFile.value = '';
+            },
+            
+            addAttachmentField(file = null) {
+                const id = crypto.randomUUID();
+                const div = document.createElement('div');
+                div.id = `new-att-${id}`;
+                div.className = 'flex items-center gap-2 border dark:border-slate-600 p-2 rounded-md bg-slate-100 dark:bg-slate-700/50';
+                div.innerHTML = `
+                    <div class="flex-grow space-y-2 text-left">
+                        <input type="text" placeholder="Descrizione allegato" class="new-att-desc block w-full text-sm rounded-lg p-2 bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 dark:text-white dark:placeholder-slate-400">
+                        <input type="file" class="new-att-file block w-full text-sm text-slate-900 border border-slate-300 rounded-lg cursor-pointer bg-white dark:text-slate-400 focus:outline-none dark:bg-slate-600 dark:border-slate-500">
+                    </div>
+                    <button type="button" class="remove-new-att-btn text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 dark:hover:bg-slate-600 flex-shrink-0"><i data-lucide="x" class="h-4 w-4"></i></button>
+                `;
+                this.newAttachmentsContainer.appendChild(div);
+
+                div.querySelector('.remove-new-att-btn').addEventListener('click', () => {
+                    div.remove();
+                });
+
+                if (file) {
+                    const fileInput = div.querySelector('.new-att-file');
+                    const descInput = div.querySelector('.new-att-desc');
+                    
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files;
+                    
+                    descInput.value = file.name;
+                }
+
+                lucide.createIcons();
+            },
+
+            fillForm(material) {
+                this.clearForm();
+                this.materialId.value = material.id;
+                Object.keys(material).forEach(key => {
+                    const element = this.form.querySelector(`#${key}`);
+                    if (element) {
+                        element.value = material[key] || '';
+                    }
+                });
+                
+                App.currentImageOrientation = material.imageOrientation || 'vertical';
+                this.updateImagePreview(material.image || null, App.currentImageOrientation);
+
+                // Restore dimensions
+                if (material.imageDimensions && material.imageDimensions.width) {
+                    this.imageUploader.classList.remove('aspect-[9/16]', 'aspect-[16/9]', 'max-w-xs');
+                    this.imageUploader.style.width = `${material.imageDimensions.width}px`;
+                    this.imageUploader.style.height = `${material.imageDimensions.height}px`;
+                    App.currentImageDimensions = material.imageDimensions;
+                } else {
+                    this.imageUploader.style.width = '';
+                    this.imageUploader.style.height = '';
+                    this.imageUploader.classList.add('max-w-xs');
+                    this.applyImageOrientation(App.currentImageOrientation);
+                    App.currentImageDimensions = { width: null, height: null };
+                }
+                
+                this.attachmentsContainer.innerHTML = '';
+                if (material.attachments) {
+                     material.attachments.forEach((att, index) => {
+                         const div = document.createElement('div');
+                         div.className = 'flex items-center justify-between text-sm p-2 bg-slate-100 dark:bg-slate-700 rounded-md';
+                         div.innerHTML = `
+                            <span class="text-slate-800 dark:text-slate-200 truncate pr-2" title="${att.description || att.file.name}">${att.description || att.file.name} (${(att.file.size / 1024).toFixed(1)} KB)</span>
+                            <button type="button" data-material-id="${material.id}" data-att-index="${index}" class="remove-att-btn text-red-500 p-1 rounded-full hover:bg-red-100 dark:hover:bg-slate-600 flex-shrink-0">&times;</button>
+                         `;
+                         this.attachmentsContainer.appendChild(div);
+                     });
+                     document.querySelectorAll('.remove-att-btn').forEach(b => b.addEventListener('click', e => {
+                         App.removeAttachment(e.currentTarget.dataset.materialId, parseInt(e.currentTarget.dataset.attIndex));
+                     }));
+                }
+                this.toggleDynamicFields();
+                this.showView('section-form');
+            },
+
+            validateField(field, condition, message) {
+                const errorP = field.nextElementSibling;
+                field.classList.toggle('border-red-500', condition);
+                field.classList.toggle('focus:border-red-500', condition);
+                field.classList.toggle('focus:ring-red-500', condition);
+                if (errorP?.classList.contains('error-message')) {
+                    errorP.classList.toggle('hidden', !condition);
+                    if(condition) errorP.textContent = message;
+                }
+                return !condition;
+            },
+
+            clearValidationErrors() {
+                 this.form.querySelectorAll('input, select, textarea').forEach(el => {
+                     el.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                     if (el.nextElementSibling?.classList.contains('error-message')) {
+                         el.nextElementSibling.classList.add('hidden');
+                     }
+                 });
+            },
+            
+            showNotification(message, isError = false) {
+                this.notificationMessage.textContent = message;
+                this.notification.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg z-50 transition-all duration-300 ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+                this.notification.classList.remove('opacity-0', 'translate-y-4');
+                setTimeout(() => {
+                    this.notification.classList.add('opacity-0', 'translate-y-4');
+                }, 3000);
+            },
+            
+            showConfirmModal({ title, message, onConfirm }) {
+                this.confirmTitle.textContent = title;
+                this.confirmMessage.textContent = message;
+                this.confirmOk.onclick = () => { onConfirm(); this.closeConfirmModal(); };
+                this.modalBackdrop.classList.remove('hidden');
+                this.confirmModal.classList.remove('hidden');
+            },
+            closeConfirmModal() {
+                 this.modalBackdrop.classList.add('hidden');
+                 this.confirmModal.classList.add('hidden');
+            },
+
+            showEditSettingModal(type, id, currentName) {
+                const typeMap = { categories: 'Categoria', states: 'Stato', locations: 'Luogo' };
+                this.editSettingTitle.textContent = `Modifica ${typeMap[type]}`;
+                this.editSettingInput.value = currentName;
+                this.editSettingId.value = id;
+                this.editSettingType.value = type;
+                this.modalBackdrop.classList.remove('hidden');
+                this.editSettingModal.classList.remove('hidden');
+                this.editSettingInput.focus();
+            },
+            closeEditSettingModal() {
+                this.modalBackdrop.classList.add('hidden');
+                this.editSettingModal.classList.add('hidden');
+            },
+
+            showDetailModal(materialId) {
+                const m = this.allMaterials.find(mat => mat.id === materialId);
+                if (!m) return;
+
+                App.currentDetailMaterialId = m.id;
+                this.detailTitle.textContent = m.denominazione;
+                
+                let imageUrl = m.image ? URL.createObjectURL(m.image) : `https://placehold.co/600x400/e2e8f0/94a3b8?text=${encodeURIComponent(m.denominazione)}`;
+                
+                const renderField = (label, value, icon, className = '') => value ? `<div class="flex items-start ${className}"><i data-lucide="${icon}" class="h-5 w-5 text-slate-500 mt-0.5 mr-3 flex-shrink-0"></i><div><dt class="font-semibold text-slate-800 dark:text-slate-200">${label}</dt><dd class="text-slate-600 dark:text-slate-400">${value}</dd></div></div>` : '';
+                
+                const renderAttachments = (attachments) => {
+                    if (!attachments || attachments.length === 0) return '';
+                    let html = `<div class="col-span-1 md:col-span-3"><h4 class="font-semibold text-slate-800 dark:text-slate-200 mb-2 mt-4 pt-4 border-t dark:border-slate-700">Allegati</h4><ul class="space-y-2">`;
+                    attachments.forEach(att => {
+                        const url = URL.createObjectURL(att.file);
+                        html += `<li><a href="${url}" target="_blank" class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:underline"><i data-lucide="file-text" class="h-4 w-4"></i>${att.description || att.file.name}</a></li>`;
+                    });
+                    html += `</ul></div>`;
+                    return html;
+                };
+
+                const renderHistory = (history) => {
+                    if (!history || history.length === 0) return '';
+                    let html = `<div class="col-span-1 md:col-span-3"><h4 class="font-semibold text-slate-800 dark:text-slate-200 mb-2 mt-4 pt-4 border-t dark:border-slate-700">Cronologia</h4><ul class="space-y-2 text-sm text-slate-500 dark:text-slate-400 max-h-40 overflow-y-auto">`;
+                    [...history].reverse().forEach(entry => {
+                         html += `<li class="flex gap-2 items-baseline"><span class="font-mono text-xs text-slate-400 flex-shrink-0 w-36">${new Date(entry.timestamp).toLocaleString('it-IT')}</span><span class="text-slate-400">-</span><span>${entry.change}</span></li>`;
+                    });
+                    html += `</ul></div>`;
+                    return html;
+                };
+
+                this.detailBody.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="md:col-span-1">
+                             <img src="${imageUrl}" class="w-full h-auto object-cover rounded-lg shadow-md" alt="Immagine di ${m.denominazione}" onerror="this.onerror=null;this.src='https://placehold.co/600x400/e2e8f0/94a3b8?text=Immagine+non+disponibile';">
+                        </div>
+                        <div class="md:col-span-2 space-y-4">
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+                                ${renderField('Stato', `<span class="text-sm font-semibold inline-block py-1 px-3 uppercase rounded-full ${this.getStatusColor(m.stato)}">${m.stato}</span>`, 'shield-check')}
+                                ${renderField('Quantità', m.quantita, 'package')}
+                                ${renderField('Categoria', m.categoria, 'grip')}
+                                ${renderField('Luogo', m.luogo, 'map-pin')}
+                                ${renderField('Numero Seriale', m.seriale, 'hash')}
+                                ${renderField('Provenienza', m.provenienza, 'anchor')}
+                                ${renderField('Dotazione', m.dotazione, 'user')}
+                                ${renderField('Data Consegna', m.dataConsegna, 'calendar-plus')}
+                                ${renderField('Data Messa in Uso', m.dataUso, 'calendar-check')}
+                                ${renderField('Nr. Protocollo', m.protocollo, 'scan-line')}
+                                ${renderField('Data Arrivo', m.dataArrivo, 'calendar-arrow-down')}
+                                ${renderField('Nr. Pratica', m.numeroPratica, 'folder-key')}
+                                ${renderField('Anno Pratica', m.annoPratica, 'folder-clock')}
+                                ${m.categoria === 'Informatica' ? renderField('MAC Address', m.macAddress, 'network') : ''}
+                                ${m.categoria === 'Veicoli' ? renderField('Targa', m.targa, 'rectangle-ellipsis') : ''}
+                                ${m.categoria === 'Veicoli' ? renderField('Chilometraggio', m.chilometraggio, 'gauge') : ''}
+                                ${m.categoria === 'Armamento' ? renderField('Matricola Arma', m.matricolaArma, 'crosshair') : ''}
+                            </dl>
+                        </div>
+                        ${renderField('Note', m.note ? `<div class="prose prose-sm dark:prose-invert max-w-none bg-slate-50 dark:bg-slate-700 p-3 rounded-md">${m.note}</div>` : null, 'notebook-tabs', 'md:col-span-3')}
+                        ${renderAttachments(m.attachments)}
+                        ${renderHistory(m.history)}
+                    </div>
+                `;
+
+                this.printCardBtn.onclick = () => App.printCard(materialId);
+
+                this.modalBackdrop.classList.remove('hidden');
+                this.detailModal.classList.remove('hidden');
+                lucide.createIcons();
+            },
+            closeDetailModal() {
+                this.modalBackdrop.classList.add('hidden');
+                this.detailModal.classList.add('hidden');
+                this.detailBody.innerHTML = '';
+                App.currentDetailMaterialId = null;
+            },
+
+            showQrCodeModal(material) {
+                this.qrCodeTitle.textContent = `QR Code: ${material.denominazione}`;
+                this.qrCodeContainer.innerHTML = '';
+                try {
+                    const qr = qrcode(0, 'L');
+                    qr.addData(material.id);
+                    qr.make();
+                    this.qrCodeContainer.innerHTML = qr.createImgTag(6, 8);
+                    
+                    this.modalBackdrop.classList.remove('hidden');
+                    this.qrCodeModal.classList.remove('hidden');
+                } catch (e) {
+                    console.error("Errore generazione QR Code:", e);
+                    this.showNotification("Impossibile generare il QR Code.", true);
+                }
+            },
+            closeQrCodeModal() {
+                 this.qrCodeModal.classList.add('hidden');
+                 if (this.detailModal.classList.contains('hidden')) {
+                    this.modalBackdrop.classList.add('hidden');
+                 }
+            },
+
+            closeAllModals() {
+                this.closeConfirmModal();
+                this.closeDetailModal();
+                this.closeEditSettingModal();
+                this.closeQrCodeModal();
+            },
+
+            startScanner() {
+                this.stopScanner(); // Assicura che non ci siano istanze attive
+                this.html5QrCode = new Html5Qrcode("qr-reader");
+                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+                
+                document.getElementById('qr-reader-results').textContent = 'Puntare la fotocamera verso un QR Code...';
+                this.html5QrCode.start({ facingMode: "environment" }, config, 
+                    (decodedText, decodedResult) => { // onScanSuccess
+                        this.stopScanner();
+                        this.showNotification(`QR Code Rilevato!`);
+                        const material = App.allMaterials.find(m => m.id === decodedText);
+                        if (material) {
+                            this.showDetailModal(decodedText);
+                        } else {
+                            this.showNotification('Materiale non trovato nel database.', true);
+                        }
+                        this.showView('section-list');
+                    },
+                    (errorMessage) => { /* onScanFailure, do nothing */ }
+                ).catch(err => {
+                     this.showNotification("Impossibile avviare la fotocamera. Controlla i permessi.", true);
+                     document.getElementById('qr-reader-results').textContent = 'Errore fotocamera.';
+                     console.error("Errore scanner:", err);
+                });
+                this.stopScanBtn.classList.remove('hidden');
+            },
+            
+            stopScanner() {
+                if (this.html5QrCode && this.html5QrCode.isScanning) {
+                    this.html5QrCode.stop().then(() => {
+                        console.log("Scanner fermato.");
+                        document.getElementById('qr-reader-results').textContent = '';
+                    }).catch(err => {
+                        console.error("Errore nel fermare lo scanner:", err);
+                    });
+                }
+                this.stopScanBtn.classList.add('hidden');
+            },
+
+            initResize(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startWidth = this.imageUploader.offsetWidth;
+                const startHeight = this.imageUploader.offsetHeight;
+                
+                this.imageUploader.classList.remove('aspect-[9/16]', 'aspect-[16/9]', 'max-w-xs', 'transition-colors');
+
+                const doDrag = (e) => {
+                    const newWidth = startWidth + e.clientX - startX;
+                    const newHeight = startHeight + e.clientY - startY;
+                    this.imageUploader.style.width = `${Math.max(120, newWidth)}px`;
+                    this.imageUploader.style.height = `${Math.max(120, newHeight)}px`;
+                };
+
+                const stopDrag = () => {
+                    this.imageUploader.classList.add('transition-colors');
+                    document.documentElement.removeEventListener('mousemove', doDrag, false);
+                    document.documentElement.removeEventListener('mouseup', stopDrag, false);
+                    
+                    App.currentImageDimensions = {
+                        width: this.imageUploader.offsetWidth,
+                        height: this.imageUploader.offsetHeight,
+                    };
+                };
+
+                document.documentElement.addEventListener('mousemove', doDrag, false);
+                document.documentElement.addEventListener('mouseup', stopDrag, false);
+            },
+        };
+
+        // --- APP LOGIC ---
+        const App = {
+            currentImageFile: null,
+            currentImageOrientation: 'vertical',
+            currentImageDimensions: { width: null, height: null },
+            currentDetailMaterialId: null, // To link QR code to open modal
+
+            async init() {
+                ThemeManager.init();
+                await dbManager.init();
+                UIManager.init();
+                await this.loadSettingsData();
+                await this.loadAndRenderMaterials();
+                UIManager.showView('section-list');
+            },
+            
+            async handleImageUpload(file) {
+                if (!file || !file.type.startsWith('image/')) return;
+
+                UIManager.showNotification('Compressione immagine in corso...');
+                const options = {
+                    maxSizeMB: 1,
+                    maxWidthOrHeight: 1024,
+                    useWebWorker: true
+                }
+                try {
+                    const compressedFile = await imageCompression(file, options);
+                    
+                    // FIX: Convert the resulting Blob back to a File to preserve the name
+                    this.currentImageFile = new File([compressedFile], file.name, {
+                        type: compressedFile.type,
+                        lastModified: new Date().getTime(),
+                    });
+
+                    this.currentImageOrientation = 'vertical';
+                    UIManager.imageUploader.style.width = '';
+                    UIManager.imageUploader.style.height = '';
+                    UIManager.imageUploader.classList.add('max-w-xs');
+                    this.currentImageDimensions = { width: null, height: null };
+
+                    UIManager.updateImagePreview(this.currentImageFile, 'vertical');
+                    UIManager.showNotification('Immagine compressa e caricata!');
+
+                } catch (error) {
+                    console.error('Errore compressione:', error);
+                    UIManager.showNotification("Errore durante la compressione dell'immagine.", true);
+                    // Fallback to original file
+                    this.currentImageFile = file;
+                    UIManager.updateImagePreview(file, 'vertical');
+                }
+            },
+
+            addDroppedFiles(files) {
+                for (const file of files) {
+                    UIManager.addAttachmentField(file);
+                }
+            },
+
+            rotateImage() {
+                this.currentImageOrientation = this.currentImageOrientation === 'vertical' ? 'horizontal' : 'vertical';
+                UIManager.applyImageOrientation(this.currentImageOrientation);
+            },
+
+            removeImage() {
+                this.currentImageFile = null;
+                this.currentImageOrientation = 'vertical';
+                UIManager.imageFile.value = '';
+                UIManager.updateImagePreview(null, 'vertical');
+            },
+            
+            updateArchiveStats() {
+                const totalCount = UIManager.allMaterials.length;
+
+                const totalSizeInBytes = UIManager.allMaterials.reduce((total, material) => {
+                    let size = 0;
+                    if (material.image && material.image.size) {
+                        size += material.image.size;
+                    }
+                    if (material.attachments && material.attachments.length > 0) {
+                        size += material.attachments.reduce((acc, att) => acc + (att.file && att.file.size ? att.file.size : 0), 0);
+                    }
+                    // Aggiungiamo una stima per i metadati (es. 2KB per oggetto)
+                    size += 2 * 1024;
+                    return total + size;
+                }, 0);
+
+                let formattedSize;
+                if (totalSizeInBytes < 1024 * 1024) {
+                    formattedSize = `${(totalSizeInBytes / 1024).toFixed(1)} KB`;
+                } else {
+                    formattedSize = `${(totalSizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
+                }
+
+                UIManager.statsTotalCount.textContent = totalCount;
+                UIManager.statsTotalSize.textContent = formattedSize;
+            },
+
+            async loadAndRenderMaterials() {
+                UIManager.allMaterials = await dbManager.getAllData('materiali');
+                UIManager.filterAndRender();
+                this.updateArchiveStats();
+            },
+
+            async loadSettingsData() {
+                const defaults = {
+                    categories: ['Informatica', 'Arredamento', 'Cancelleria', 'Vestiario', 'Armamento', 'Veicoli'],
+                    states: ['Nuovo', 'In uso', 'Inefficiente', 'In riparazione', 'Dismesso'],
+                    locations: ['Cucina-Sala Convegno-Mensa', 'Ufficio Comandante', 'Ufficio Sott.le Addetto', 'Uff Militare Servizio Caserma']
+                };
+                for (const key in UIManager.settingsData) {
+                    let data = await dbManager.getAllData(key);
+                    if (data.length === 0 && defaults[key]) { // First time setup
+                        for (const name of defaults[key]) {
+                            const newItem = { id: crypto.randomUUID(), name };
+                            await dbManager.saveData(key, newItem);
+                            data.push(newItem);
+                        }
+                    }
+                    UIManager.settingsData[key] = data;
+                }
+                UIManager.populateDropdowns();
+                UIManager.renderSettings();
+            },
+
+            async addSettingItem(type, name) {
+                if (!name || !name.trim()) return;
+                const normalizedName = name.trim();
+                if (UIManager.settingsData[type].some(item => item.name.toLowerCase() === normalizedName.toLowerCase())) {
+                    UIManager.showNotification(`"${normalizedName}" esiste già.`, true);
+                    return;
+                }
+                const newItem = { id: crypto.randomUUID(), name: normalizedName };
+                await dbManager.saveData(type, newItem);
+                await this.loadSettingsData(); // Reload all settings
+            },
+
+            async deleteSettingItem(type, id) {
+                const itemToDelete = UIManager.settingsData[type].find(i => i.id === id);
+                if (!itemToDelete) return;
+                
+                const fieldMap = { categories: 'categoria', states: 'stato', locations: 'luogo' };
+                const isInUse = UIManager.allMaterials.some(m => m[fieldMap[type]] === itemToDelete.name);
+                
+                if (isInUse) {
+                    UIManager.showNotification(`Impossibile eliminare "${itemToDelete.name}" perché è in uso.`, true);
+                    return;
+                }
+                
+                await dbManager.deleteData(type, id);
+                await this.loadSettingsData();
+                UIManager.showNotification(`"${itemToDelete.name}" eliminato.`);
+            },
+            
+            async updateSettingItem(type, id, newName) {
+                const normalizedNewName = newName.trim();
+                if (!normalizedNewName) {
+                    UIManager.showNotification('Il nome non può essere vuoto.', true);
+                    return;
+                }
+
+                const itemExists = UIManager.settingsData[type].some(item => item.name.toLowerCase() === normalizedNewName.toLowerCase() && item.id !== id);
+                if (itemExists) {
+                    UIManager.showNotification(`"${normalizedNewName}" esiste già.`, true);
+                    return;
+                }
+
+                const itemToUpdate = UIManager.settingsData[type].find(i => i.id === id);
+                if (!itemToUpdate) return;
+
+                const oldName = itemToUpdate.name;
+                
+                if (oldName === normalizedNewName) {
+                    UIManager.closeEditSettingModal();
+                    return;
+                }
+
+                await dbManager.saveData(type, { id, name: normalizedNewName });
+
+                const fieldMap = { categories: 'categoria', states: 'stato', locations: 'luogo' };
+                const materialsToUpdate = UIManager.allMaterials.filter(m => m[fieldMap[type]] === oldName);
+                
+                if (materialsToUpdate.length > 0) {
+                    const updatePromises = materialsToUpdate.map(material => {
+                        material[fieldMap[type]] = normalizedNewName;
+                        return dbManager.saveData('materiali', material);
+                    });
+                    await Promise.all(updatePromises);
+                }
+
+                UIManager.showNotification(`"${oldName}" modificato in "${normalizedNewName}".`);
+                UIManager.closeEditSettingModal();
+                await this.loadSettingsData();
+                await this.loadAndRenderMaterials();
+            },
+            
+            getChanges(oldObj, newObj) {
+                const changes = [];
+                const fieldsToTrack = {
+                    denominazione: "Denominazione", stato: "Stato", quantita: "Quantità", 
+                    luogo: "Luogo", seriale: "Seriale", dotazione: "Dotazione"
+                };
+                for (const key in fieldsToTrack) {
+                    const oldValue = oldObj[key] || '';
+                    const newValue = newObj[key] || '';
+                    if (oldValue.toString() !== newValue.toString()) {
+                        changes.push(`${fieldsToTrack[key]}: da '${oldValue}' a '${newValue}'`);
+                    }
+                }
+                return changes;
+            },
+
+            async saveMaterial() {
+                UIManager.clearValidationErrors();
+                let isValid = true;
+                isValid &= UIManager.validateField(UIManager.denominazione, UIManager.denominazione.value.trim() === '', 'Campo obbligatorio.');
+                isValid &= UIManager.validateField(UIManager.quantita, !/^[1-9]\d*$/.test(UIManager.quantita.value), 'Deve essere un numero intero > 0.');
+                isValid &= UIManager.validateField(UIManager.categoria, !UIManager.categoria.value, 'Selezionare una categoria.');
+                isValid &= UIManager.validateField(UIManager.stato, !UIManager.stato.value, 'Selezionare uno stato.');
+                isValid &= UIManager.validateField(UIManager.luogo, !UIManager.luogo.value, 'Selezionare un luogo.');
+
+                const dataConsegna = UIManager.dataConsegna.value, dataUso = UIManager.dataUso.value;
+                if (dataConsegna && new Date(dataConsegna) > new Date()) isValid &= UIManager.validateField(UIManager.dataConsegna, true, 'La data non può essere futura.');
+                if (dataUso && new Date(dataUso) > new Date()) isValid &= UIManager.validateField(UIManager.dataUso, true, 'La data non può essere futura.');
+                if (dataConsegna && dataUso && new Date(dataUso) < new Date(dataConsegna)) isValid &= UIManager.validateField(UIManager.dataUso, true, 'Deve essere >= data consegna.');
+                if (UIManager.categoria.value === 'Veicoli' && UIManager.chilometraggio.value) {
+                    isValid &= UIManager.validateField(UIManager.chilometraggio, !/^\d+$/.test(UIManager.chilometraggio.value), 'Deve essere un numero non negativo.');
+                }
+                if (!isValid) return;
+
+                const id = UIManager.materialId.value || crypto.randomUUID();
+                const isNew = !UIManager.materialId.value;
+                const oldMaterial = isNew ? {} : (await dbManager.getAllData('materiali')).find(m => m.id === id);
+                
+                let materialData = {
+                    denominazione: UIManager.denominazione.value.trim(), categoria: UIManager.categoria.value,
+                    quantita: parseInt(UIManager.quantita.value), stato: UIManager.stato.value, luogo: UIManager.luogo.value,
+                    protocollo: UIManager.protocollo.value.trim(), dataArrivo: UIManager.dataArrivo.value,
+                    numeroPratica: UIManager.numeroPratica.value.trim(), annoPratica: UIManager.annoPratica.value.trim(),
+                    seriale: UIManager.seriale.value.trim(), provenienza: UIManager.provenienza.value.trim(), dataConsegna: UIManager.dataConsegna.value,
+                    dataUso: UIManager.dataUso.value, dotazione: UIManager.dotazione.value.trim(), note: UIManager.note.value.trim(),
+                    macAddress: UIManager.macAddress.value.trim(), targa: UIManager.targa.value.trim(),
+                    chilometraggio: UIManager.chilometraggio.value ? parseInt(UIManager.chilometraggio.value) : null,
+                    matricolaArma: UIManager.matricolaArma.value.trim()
+                };
+
+                let material = { ...oldMaterial, ...materialData, id, history: oldMaterial.history || [] };
+                
+                if (isNew) material.createdAt = new Date().toISOString();
+
+                material.image = this.currentImageFile;
+                material.imageOrientation = this.currentImageOrientation;
+                material.imageDimensions = this.currentImageDimensions;
+
+                material.attachments = oldMaterial.attachments || [];
+                const newAttachmentFields = UIManager.newAttachmentsContainer.querySelectorAll('div[id^="new-att-"]');
+                for (const field of newAttachmentFields) {
+                    const descInput = field.querySelector('.new-att-desc'), fileInput = field.querySelector('.new-att-file');
+                    if (fileInput.files[0]) {
+                        material.attachments.push({ description: descInput.value || fileInput.files[0].name, file: fileInput.files[0] });
+                    }
+                }
+
+                const changes = this.getChanges(oldMaterial, material);
+                if (changes.length > 0) {
+                    material.history.push({ timestamp: new Date().toISOString(), change: isNew ? 'Materiale creato.' : changes.join('; ') });
+                }
+                
+                await dbManager.saveData('materiali', material);
+                UIManager.showNotification(`Materiale salvato.`);
+                UIManager.clearForm();
+                await this.loadAndRenderMaterials();
+                UIManager.showView('section-list');
+            },
+
+            editMaterial(id) {
+                const material = UIManager.allMaterials.find(m => m.id === id);
+                if (material) {
+                    this.currentImageFile = material.image || null;
+                    UIManager.fillForm(material);
+                }
+            },
+            
+            async removeAttachment(materialId, attachmentIndex) {
+                 let material = (await dbManager.getAllData('materiali')).find(m => m.id === materialId);
+                 if (material?.attachments) {
+                     material.attachments.splice(attachmentIndex, 1);
+                     await dbManager.saveData('materiali', material);
+                     await this.loadAndRenderMaterials();
+                     // Se il modulo sta mostrando questo materiale, aggiornalo
+                     if (UIManager.materialId.value === materialId) {
+                         const updatedMaterial = UIManager.allMaterials.find(m => m.id === materialId);
+                         if(updatedMaterial) UIManager.fillForm(updatedMaterial);
+                     }
+                     UIManager.showNotification('Allegato rimosso.');
+                 }
+            },
+
+            deleteMaterial(id) {
+                const material = UIManager.allMaterials.find(m => m.id === id);
+                if (material) {
+                    UIManager.showConfirmModal({
+                        title: 'Elimina Materiale',
+                        message: `Sei sicuro di voler eliminare "${material.denominazione}"? L'azione è irreversibile.`,
+                        onConfirm: async () => {
+                            await dbManager.deleteData('materiali', id);
+                            UIManager.showNotification(`Materiale eliminato.`);
+                            this.loadAndRenderMaterials();
+                        }
+                    });
+                }
+            },
+            
+            async exportData() {
+                 const allData = {
+                    materials: await dbManager.getAllData('materiali'),
+                    categories: await dbManager.getAllData('categories'),
+                    states: await dbManager.getAllData('states'),
+                    locations: await dbManager.getAllData('locations'),
+                 };
+
+                 if (allData.materials.length === 0) return UIManager.showNotification('Nessun dato da esportare.', true);
+                 
+                 UIManager.showNotification('Esportazione in corso...');
+
+                 try {
+                     const zip = new JSZip();
+                     const attachmentsFolder = zip.folder("allegati");
+                     const imagesFolder = zip.folder("immagini");
+                     
+                     const metadata = allData.materials.map(m => {
+                         const meta = {...m};
+                         if (m.attachments?.length > 0) {
+                            meta.attachments = m.attachments.map(att => {
+                                // Aggiunto controllo di sicurezza
+                                if (att.file && att.file.name) {
+                                    const uniqueFilename = `${m.id}-${att.file.name}`;
+                                    attachmentsFolder.file(uniqueFilename, att.file);
+                                    return { description: att.description, filename: uniqueFilename, type: att.file.type };
+                                }
+                                return null;
+                            }).filter(Boolean); // Rimuove eventuali allegati non validi
+                         }
+                         if (m.image && m.image.name) { // Aggiunto controllo di sicurezza
+                            const imageFilename = `${m.id}-image.${m.image.name.split('.').pop() || 'jpg'}`;
+                            imagesFolder.file(imageFilename, m.image);
+                            meta.imageFilename = imageFilename;
+                         }
+                         delete meta.image;
+    
+                         return meta;
+                     });
+                     
+                     zip.file("data.json", JSON.stringify({ ...allData, materials: metadata }, null, 2));
+                     
+                     const content = await zip.generateAsync({type:"blob"});
+                     const link = document.createElement('a');
+                     link.href = URL.createObjectURL(content);
+                     link.download = `archivio_materiale_${new Date().toISOString().slice(0, 10)}.zip`;
+                     
+                     // Fix: Aggiunge il link al DOM prima di cliccarlo
+                     document.body.appendChild(link);
+                     link.click();
+                     document.body.removeChild(link);
+                     
+                     URL.revokeObjectURL(link.href);
+                     UIManager.showNotification('Esportazione completata.');
+
+                 } catch (error) {
+                    console.error("Errore esportazione:", error);
+                    UIManager.showNotification("Errore durante l'esportazione del backup.", true);
+                 }
+            },
+            
+            importData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                UIManager.showConfirmModal({
+                    title: 'Importa Archivio',
+                    message: 'Stai per importare un nuovo archivio. Tutti i dati attuali verranno cancellati. Continuare?',
+                    onConfirm: async () => {
+                        UIManager.showNotification('Importazione in corso...');
+                        try {
+                            const zip = await JSZip.loadAsync(file);
+                            const dataFile = zip.file("data.json");
+                            if (!dataFile) throw new Error("File data.json non trovato.");
+                            
+                            const allData = JSON.parse(await dataFile.async("string"));
+                            
+                            await Promise.all([
+                                dbManager.clearStore('materiali'), dbManager.clearStore('categories'),
+                                dbManager.clearStore('states'), dbManager.clearStore('locations')
+                            ]);
+                            
+                            for (const type in UIManager.settingsData) {
+                                if (allData[type]) {
+                                    for (const item of allData[type]) {
+                                        await dbManager.saveData(type, item);
+                                    }
+                                }
+                            }
+
+                            for (const meta of allData.materials) {
+                                if (meta.attachments?.length > 0) {
+                                    for (let i = 0; i < meta.attachments.length; i++) {
+                                        const attMeta = meta.attachments[i];
+                                        const attFile = zip.file(`allegati/${attMeta.filename}`);
+                                        if (attFile) {
+                                            const blob = await attFile.async("blob");
+                                            meta.attachments[i] = {
+                                                description: attMeta.description,
+                                                file: new File([blob], attMeta.filename, { type: attMeta.type })
+                                            };
+                                        }
+                                    }
+                                }
+                                if (meta.imageFilename) {
+                                    const imageFile = zip.file(`immagini/${meta.imageFilename}`);
+                                    if (imageFile) {
+                                        const blob = await imageFile.async("blob");
+                                        meta.image = new File([blob], meta.imageFilename, { type: blob.type });
+                                    }
+                                    delete meta.imageFilename;
+                                }
+                                await dbManager.saveData('materiali', meta);
+                            }
+
+                            UIManager.showNotification('Importazione completata!');
+                            await this.loadSettingsData();
+                            await this.loadAndRenderMaterials();
+                            UIManager.showView('section-list');
+
+                        } catch (error) {
+                            console.error("Errore importazione:", error);
+                            UIManager.showNotification('Errore importazione. File non valido.', true);
+                        } finally {
+                            UIManager.importFile.value = '';
+                        }
+                    }
+                });
+            },
+
+            async printList() {
+                const materialsToPrint = UIManager.filteredMaterials;
+                if (materialsToPrint.length === 0) {
+                    UIManager.showNotification("Nessun materiale da stampare.", true);
+                    return;
+                }
+
+                let html = `<div style="padding: 2rem;">
+                    <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem; border-bottom: 2px solid #ccc; padding-bottom: 0.5rem;">Elenco Materiale</h1>
+                    <p style="font-size: 0.875rem; color: #555; margin-bottom: 1.5rem;">${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })} - ${materialsToPrint.length} elementi</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                        <thead style="background-color: #f1f1f1;">
+                            <tr>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Denominazione</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Categoria</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">S/N</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Luogo</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Stato</th>
+                                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Qtà</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                materialsToPrint.forEach(m => {
+                    html += `
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${m.denominazione}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${m.categoria}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${m.seriale || 'N/D'}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${m.luogo}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${m.stato}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${m.quantita}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div>`;
+                UIManager.printArea.innerHTML = html;
+                setTimeout(() => window.print(), 100); // Aggiunto timeout
+            },
+
+            async printQRCode() {
+                const title = UIManager.qrCodeTitle.textContent;
+                const qrCodeContent = UIManager.qrCodeContainer.innerHTML;
+                if (!qrCodeContent) return;
+
+                let printHTML = `
+                    <div style="text-align: center; padding: 2rem; page-break-inside: avoid;">
+                        <h2 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 1rem;">${title}</h2>
+                        ${qrCodeContent}
+                        <p style="margin-top: 0.5rem; font-size: 0.875rem; font-family: monospace;">ID: ${this.currentDetailMaterialId}</p>
+                    </div>
+                `;
+                UIManager.printArea.innerHTML = printHTML;
+                setTimeout(() => window.print(), 100); // Aggiunto timeout
+            },
+
+            async printCard(materialId) {
+                const m = UIManager.allMaterials.find(mat => mat.id === materialId);
+                if (!m) return;
+                
+                let imageUrl = 'about:blank';
+                if (m.image) {
+                    const reader = new FileReader();
+                    const promise = new Promise(resolve => reader.onload = e => resolve(e.target.result));
+                    reader.readAsDataURL(m.image);
+                    imageUrl = await promise;
+                }
+                
+                const renderField = (label, value) => value ? `<div style="margin-bottom: 1rem;"><p style="font-size: 0.75rem; color: #555; margin-bottom: 0.125rem;">${label}</p><p style="font-weight: 600;">${value}</p></div>` : '';
+
+                let html = `
+                    <div style="padding: 2rem; display: flex; flex-direction: column; gap: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #ccc; padding-bottom: 1rem;">
+                            <div>
+                                <h1 style="font-size: 1.8rem; font-weight: bold;">${m.denominazione}</h1>
+                                <p style="font-size: 1rem; color: #333;">${m.categoria}</p>
+                            </div>
+                             <p style="font-size: 0.8rem; color: #555;">Scheda del ${new Date().toLocaleDateString()}</p>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+                            <div>
+                                <img src="${imageUrl}" style="width: 100%; border-radius: 0.5rem; border: 1px solid #eee;" alt="Immagine">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                ${renderField('Stato', m.stato)}
+                                ${renderField('Quantità', m.quantita)}
+                                ${renderField('Luogo', m.luogo)}
+                                ${renderField('Numero Seriale', m.seriale)}
+                                ${renderField('Provenienza', m.provenienza)}
+                                ${renderField('Dotazione', m.dotazione)}
+                                ${renderField('Data Consegna', m.dataConsegna)}
+                                ${renderField('Data Messa in Uso', m.dataUso)}
+                                ${renderField('Nr. Protocollo', m.protocollo)}
+                                ${renderField('Data Arrivo', m.dataArrivo)}
+                                ${renderField('Nr. Pratica', m.numeroPratica)}
+                                ${renderField('Anno Pratica', m.annoPratica)}
+                            </div>
+                        </div>
+                        ${renderField('Note', m.note)}
+                    </div>
+                `;
+                UIManager.printArea.innerHTML = html;
+                setTimeout(() => window.print(), 100); // Aggiunto timeout
+            },
+            
+            generateAndShowQRCode() {
+                if (this.currentDetailMaterialId) {
+                    const material = UIManager.allMaterials.find(m => m.id === this.currentDetailMaterialId);
+                    if (material) UIManager.showQrCodeModal(material);
+                }
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            App.init();
+            
+            // Obfuscated credit
+            const _0x5f9a3b = function() {
+                try {
+                    const _0x1c4e8d = 'UG93ZXJlZCBCeSBNaWNoZWxlIFJvc2F0aQ==';
+                    const _0x3b2a1f = document.getElementById('credit-box-container');
+                    if (!_0x3b2a1f) return;
+
+                    const _0x4e8d7c = document.createElement('style');
+                    _0x4e8d7c.innerHTML = `
+                        @keyframes color-cycle {
+                            0%, 100% { color: #818cf8; }
+                            25% { color: #f472b6; }
+                            50% { color: #34d399; }
+                            75% { color: #fbbf24; }
+                        }
+                        @keyframes pulse-light {
+                            0%, 100% { transform: scale(1); opacity: 0.7; }
+                            50% { transform: scale(1.05); opacity: 1; }
+                        }
+                        #credit-box-container { text-align: center; }
+                        #credit-box-container > span {
+                            font-size: 0.6rem;
+                            font-weight: 500;
+                            letter-spacing: 0.05em;
+                            text-transform: uppercase;
+                            display: inline-block;
+                            white-space: nowrap;
+                            animation: color-cycle 8s infinite linear, pulse-light 4s infinite ease-in-out;
+                        }
+                    `;
+                    document.head.appendChild(_0x4e8d7c);
+
+                    const _0x8d7c5a = document.createElement('span');
+                    _0x8d7c5a.textContent = atob(_0x1c4e8d);
+                    _0x3b2a1f.appendChild(_0x8d7c5a);
+
+                } catch (e) { /* silent fail */ }
+            };
+            _0x5f9a3b();
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
