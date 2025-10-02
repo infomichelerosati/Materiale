@@ -1093,6 +1093,9 @@
                 App.currentImageOrientation = material.imageOrientation || 'vertical';
                 this.updateImagePreview(material.image || null, App.currentImageOrientation);
 
+                // FIX: Re-imposta l'immagine corrente nello stato dell'app dopo che clearForm() l'ha cancellata.
+                App.currentImageFile = material.image || null;
+
                 // Restore dimensions
                 if (material.imageDimensions && material.imageDimensions.width) {
                     this.imageUploader.classList.remove('aspect-[9/16]', 'aspect-[16/9]', 'max-w-xs');
@@ -1973,4 +1976,5 @@
     </script>
 </body>
 </html>
+
 
