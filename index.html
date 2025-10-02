@@ -183,7 +183,7 @@
                         <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                             <div class="relative xl:col-span-1">
                                  <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400"></i>
-                                 <input type="search" id="searchBar" placeholder="Cerca per denominazione, seriale..." class="pl-10 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white">
+                                 <input type="search" id="searchBar" placeholder="Cerca per denominazione, seriale, note..." class="pl-10 w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:placeholder-slate-400 dark:text-white">
                             </div>
                             <select id="filterCategoria" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="">Tutte le categorie</option></select>
                             <select id="filterStato" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="">Tutti gli stati</option></select>
@@ -268,7 +268,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- MODIFIED IMAGE UPLOADER -->
                                 <div class="lg:col-span-2">
                                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Immagine</label>
                                     <div class="relative group mt-1 w-full mx-auto lg:mx-0">
@@ -296,7 +295,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- END MODIFIED IMAGE UPLOADER -->
 
 
                                 <div class="lg:col-span-5">
@@ -881,7 +879,12 @@
                 let materials = [...this.allMaterials];
 
                 materials = materials.filter(m => 
-                    (searchTerm === '' || m.denominazione.toLowerCase().includes(searchTerm) || (m.seriale && m.seriale.toLowerCase().includes(searchTerm))) &&
+                    (
+                        searchTerm === '' || 
+                        m.denominazione.toLowerCase().includes(searchTerm) || 
+                        (m.seriale && m.seriale.toLowerCase().includes(searchTerm)) ||
+                        (m.note && m.note.toLowerCase().includes(searchTerm))
+                    ) &&
                     (category === '' || m.categoria === category) &&
                     (status === '' || m.stato === status) &&
                     (location === '' || m.luogo === location)
@@ -1305,6 +1308,7 @@
                         this.showNotification(`QR Code Rilevato!`);
                         const material = this.allMaterials.find(m => m.id === decodedText);
                         if (material) {
+                            this.showView('section-list');
                             this.showDetailModal(decodedText);
                         } else {
                             this.showNotification('Materiale non trovato nel database.', true);
@@ -1400,7 +1404,6 @@
                 try {
                     const compressedFile = await imageCompression(file, options);
                     
-                    // FIX: Convert the resulting Blob back to a File to preserve the name
                     this.currentImageFile = new File([compressedFile], file.name, {
                         type: compressedFile.type,
                         lastModified: new Date().getTime(),
@@ -1418,7 +1421,6 @@
                 } catch (error) {
                     console.error('Errore compressione:', error);
                     UIManager.showNotification("Errore durante la compressione dell'immagine.", true);
-                    // Fallback to original file
                     this.currentImageFile = file;
                     UIManager.updateImagePreview(file, 'vertical');
                 }
@@ -1454,8 +1456,7 @@
                     if (material.attachments && material.attachments.length > 0) {
                         size += material.attachments.reduce((acc, att) => acc + (att.file && att.file.size ? att.file.size : 0), 0);
                     }
-                    // Aggiungiamo una stima per i metadati (es. 2KB per oggetto)
-                    size += 2 * 1024;
+                    size += 2 * 1024; // Stima per metadati
                     return total + size;
                 }, 0);
 
@@ -1506,7 +1507,7 @@
                 }
                 const newItem = { id: crypto.randomUUID(), name: normalizedName };
                 await dbManager.saveData(type, newItem);
-                await this.loadSettingsData(); // Reload all settings
+                await this.loadSettingsData();
             },
 
             async deleteSettingItem(type, id) {
@@ -1592,19 +1593,29 @@
                 isValid &= UIManager.validateField(UIManager.categoria, !UIManager.categoria.value, 'Selezionare una categoria.');
                 isValid &= UIManager.validateField(UIManager.stato, !UIManager.stato.value, 'Selezionare uno stato.');
                 isValid &= UIManager.validateField(UIManager.luogo, !UIManager.luogo.value, 'Selezionare un luogo.');
+                
+                const dataFields = [UIManager.dataConsegna, UIManager.dataUso, UIManager.dataArrivo];
+                dataFields.forEach(field => {
+                    if (field.value) {
+                        const date = new Date(field.value);
+                        isValid &= UIManager.validateField(field, date > new Date(), 'La data non può essere futura.');
+                        isValid &= UIManager.validateField(field, date.getFullYear() < 1920, 'L\'anno non è valido.');
+                    }
+                });
 
-                const dataConsegna = UIManager.dataConsegna.value, dataUso = UIManager.dataUso.value;
-                if (dataConsegna && new Date(dataConsegna) > new Date()) isValid &= UIManager.validateField(UIManager.dataConsegna, true, 'La data non può essere futura.');
-                if (dataUso && new Date(dataUso) > new Date()) isValid &= UIManager.validateField(UIManager.dataUso, true, 'La data non può essere futura.');
-                if (dataConsegna && dataUso && new Date(dataUso) < new Date(dataConsegna)) isValid &= UIManager.validateField(UIManager.dataUso, true, 'Deve essere >= data consegna.');
+                if (UIManager.dataConsegna.value && UIManager.dataUso.value && new Date(UIManager.dataUso.value) < new Date(UIManager.dataConsegna.value)) {
+                    isValid &= UIManager.validateField(UIManager.dataUso, true, 'Deve essere successiva alla data di consegna.');
+                }
+
                 if (UIManager.categoria.value === 'Veicoli' && UIManager.chilometraggio.value) {
                     isValid &= UIManager.validateField(UIManager.chilometraggio, !/^\d+$/.test(UIManager.chilometraggio.value), 'Deve essere un numero non negativo.');
                 }
+                
                 if (!isValid) return;
 
                 const id = UIManager.materialId.value || crypto.randomUUID();
                 const isNew = !UIManager.materialId.value;
-                const oldMaterial = isNew ? {} : (await dbManager.getAllData('materiali')).find(m => m.id === id);
+                const oldMaterial = isNew ? {} : (await dbManager.getAllData('materiali')).find(m => m.id === id) || {};
                 
                 let materialData = {
                     denominazione: UIManager.denominazione.value.trim(), categoria: UIManager.categoria.value,
@@ -1650,7 +1661,6 @@
             editMaterial(id) {
                 const material = UIManager.allMaterials.find(m => m.id === id);
                 if (material) {
-                    this.currentImageFile = material.image || null;
                     UIManager.fillForm(material);
                 }
             },
@@ -1661,7 +1671,6 @@
                      material.attachments.splice(attachmentIndex, 1);
                      await dbManager.saveData('materiali', material);
                      await this.loadAndRenderMaterials();
-                     // Se il modulo sta mostrando questo materiale, aggiornalo
                      if (UIManager.materialId.value === materialId) {
                          const updatedMaterial = UIManager.allMaterials.find(m => m.id === materialId);
                          if(updatedMaterial) UIManager.fillForm(updatedMaterial);
@@ -1706,16 +1715,15 @@
                          const meta = {...m};
                          if (m.attachments?.length > 0) {
                             meta.attachments = m.attachments.map(att => {
-                                // Aggiunto controllo di sicurezza
                                 if (att.file && att.file.name) {
                                     const uniqueFilename = `${m.id}-${att.file.name}`;
                                     attachmentsFolder.file(uniqueFilename, att.file);
                                     return { description: att.description, filename: uniqueFilename, type: att.file.type };
                                 }
                                 return null;
-                            }).filter(Boolean); // Rimuove eventuali allegati non validi
+                            }).filter(Boolean);
                          }
-                         if (m.image && m.image.name) { // Aggiunto controllo di sicurezza
+                         if (m.image && m.image.name) {
                             const imageFilename = `${m.id}-image.${m.image.name.split('.').pop() || 'jpg'}`;
                             imagesFolder.file(imageFilename, m.image);
                             meta.imageFilename = imageFilename;
@@ -1732,7 +1740,6 @@
                      link.href = URL.createObjectURL(content);
                      link.download = `archivio_materiale_${new Date().toISOString().slice(0, 10)}.zip`;
                      
-                     // Fix: Aggiunge il link al DOM prima di cliccarlo
                      document.body.appendChild(link);
                      link.click();
                      document.body.removeChild(link);
@@ -1854,7 +1861,7 @@
 
                 html += `</tbody></table></div>`;
                 UIManager.printArea.innerHTML = html;
-                setTimeout(() => window.print(), 100); // Aggiunto timeout
+                setTimeout(() => window.print(), 100);
             },
 
             async printQRCode() {
@@ -1870,7 +1877,7 @@
                     </div>
                 `;
                 UIManager.printArea.innerHTML = printHTML;
-                setTimeout(() => window.print(), 100); // Aggiunto timeout
+                setTimeout(() => window.print(), 100);
             },
 
             async printCard(materialId) {
@@ -1919,7 +1926,7 @@
                     </div>
                 `;
                 UIManager.printArea.innerHTML = html;
-                setTimeout(() => window.print(), 100); // Aggiunto timeout
+                setTimeout(() => window.print(), 100);
             },
             
             generateAndShowQRCode() {
@@ -1976,6 +1983,5 @@
     </script>
 </body>
 </html>
-
 
 
