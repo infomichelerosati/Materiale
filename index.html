@@ -1300,13 +1300,19 @@
                     (decodedText, decodedResult) => { // onScanSuccess
                         this.stopScanner();
                         this.showNotification(`QR Code Rilevato!`);
-                        const material = App.allMaterials.find(m => m.id === decodedText);
+                        const material = this.allMaterials.find(m => m.id === decodedText);
                         if (material) {
                             this.showDetailModal(decodedText);
                         } else {
                             this.showNotification('Materiale non trovato nel database.', true);
+                             // Riavvia lo scanner se il QR non è valido, dopo 2 secondi
+                            setTimeout(() => {
+                                // Riavvia solo se l'utente è ancora nella sezione scanner
+                                if (!document.getElementById('section-scanner').classList.contains('hidden')) {
+                                    this.startScanner();
+                                }
+                            }, 2000);
                         }
-                        this.showView('section-list');
                     },
                     (errorMessage) => { /* onScanFailure, do nothing */ }
                 ).catch(err => {
@@ -1967,3 +1973,4 @@
     </script>
 </body>
 </html>
+
