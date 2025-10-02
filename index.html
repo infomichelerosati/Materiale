@@ -84,6 +84,10 @@
             border-radius: 0.5rem;
             overflow: hidden;
         }
+        
+        #progress-bar-inner {
+            transition: width 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300">
@@ -495,6 +499,20 @@
         </div>
     </div>
     
+    <!-- Modale di Avanzamento -->
+    <div id="progress-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="progress-title" class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Operazione in corso...</h3>
+            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-2">
+                <div id="progress-bar-inner" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-sm font-medium text-slate-500 dark:text-slate-400">
+                <span id="progress-status">Inizializzazione...</span>
+                <span id="progress-percent">0%</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Notifica Toast -->
     <div id="notification" class="fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg z-50 opacity-0 translate-y-4 transition-all duration-300">
         <p id="notification-message"></p>
@@ -704,6 +722,13 @@
             printArea: document.getElementById('print-area'),
             statsTotalCount: document.getElementById('stats-total-count'),
             statsTotalSize: document.getElementById('stats-total-size'),
+
+            // Modale di Avanzamento
+            progressModal: document.getElementById('progress-modal'),
+            progressTitle: document.getElementById('progress-title'),
+            progressBarInner: document.getElementById('progress-bar-inner'),
+            progressStatus: document.getElementById('progress-status'),
+            progressPercent: document.getElementById('progress-percent'),
 
             // QR Code
             qrReader: document.getElementById('qr-reader'),
@@ -1284,7 +1309,7 @@
             },
             closeQrCodeModal() {
                  this.qrCodeModal.classList.add('hidden');
-                 if (this.detailModal.classList.contains('hidden')) {
+                 if (this.detailModal.classList.contains('hidden') && this.progressModal.classList.contains('hidden')) {
                     this.modalBackdrop.classList.add('hidden');
                  }
             },
@@ -1294,6 +1319,28 @@
                 this.closeDetailModal();
                 this.closeEditSettingModal();
                 this.closeQrCodeModal();
+                this.hideProgressModal();
+            },
+
+            showProgressModal(title) {
+                this.progressTitle.textContent = title;
+                this.updateProgress(0, 'Inizializzazione...');
+                this.modalBackdrop.classList.remove('hidden');
+                this.progressModal.classList.remove('hidden');
+            },
+
+            updateProgress(percent, status) {
+                const p = Math.round(percent);
+                this.progressBarInner.style.width = `${p}%`;
+                this.progressPercent.textContent = `${p}%`;
+                this.progressStatus.textContent = status;
+            },
+
+            hideProgressModal() {
+                this.progressModal.classList.add('hidden');
+                if (this.detailModal.classList.contains('hidden') && this.confirmModal.classList.contains('hidden')) {
+                    this.modalBackdrop.classList.add('hidden');
+                }
             },
 
             startScanner() {
@@ -1702,9 +1749,12 @@
                     locations: await dbManager.getAllData('locations'),
                  };
 
-                 if (allData.materials.length === 0) return UIManager.showNotification('Nessun dato da esportare.', true);
+                 if (allData.materials.length === 0) {
+                     UIManager.showNotification('Nessun dato da esportare.', true);
+                     return;
+                 }
                  
-                 UIManager.showNotification('Esportazione in corso...');
+                UIManager.showProgressModal('Esportazione in corso...');
 
                  try {
                      const zip = new JSZip();
@@ -1735,7 +1785,14 @@
                      
                      zip.file("data.json", JSON.stringify({ ...allData, materials: metadata }, null, 2));
                      
-                     const content = await zip.generateAsync({type:"blob"});
+                     const content = await zip.generateAsync(
+                        {type:"blob"},
+                        (metadata) => {
+                            UIManager.updateProgress(metadata.percent, `Compressione: ${metadata.currentFile || '...'}`);
+                        }
+                    );
+
+                     UIManager.updateProgress(100, "Download...");
                      const link = document.createElement('a');
                      link.href = URL.createObjectURL(content);
                      link.download = `archivio_materiale_${new Date().toISOString().slice(0, 10)}.zip`;
@@ -1750,6 +1807,8 @@
                  } catch (error) {
                     console.error("Errore esportazione:", error);
                     UIManager.showNotification("Errore durante l'esportazione del backup.", true);
+                 } finally {
+                    setTimeout(() => UIManager.hideProgressModal(), 500);
                  }
             },
             
@@ -1761,19 +1820,27 @@
                     title: 'Importa Archivio',
                     message: 'Stai per importare un nuovo archivio. Tutti i dati attuali verranno cancellati. Continuare?',
                     onConfirm: async () => {
-                        UIManager.showNotification('Importazione in corso...');
+                        UIManager.showProgressModal('Importazione in corso...');
                         try {
-                            const zip = await JSZip.loadAsync(file);
+                            const zip = await JSZip.loadAsync(file, {
+                                update: (metadata) => {
+                                    UIManager.updateProgress(metadata.percent, "Decompressione file...");
+                                }
+                            });
+
                             const dataFile = zip.file("data.json");
                             if (!dataFile) throw new Error("File data.json non trovato.");
                             
+                            UIManager.updateProgress(0, "Lettura metadati...");
                             const allData = JSON.parse(await dataFile.async("string"));
                             
+                            UIManager.updateProgress(10, "Pulizia archivio...");
                             await Promise.all([
                                 dbManager.clearStore('materiali'), dbManager.clearStore('categories'),
                                 dbManager.clearStore('states'), dbManager.clearStore('locations')
                             ]);
                             
+                            UIManager.updateProgress(20, "Importazione impostazioni...");
                             for (const type in UIManager.settingsData) {
                                 if (allData[type]) {
                                     for (const item of allData[type]) {
@@ -1781,15 +1848,20 @@
                                     }
                                 }
                             }
+                            
+                            const totalMaterials = allData.materials.length;
+                            for (let i = 0; i < totalMaterials; i++) {
+                                const meta = allData.materials[i];
+                                const progress = 20 + Math.round(((i + 1) / totalMaterials) * 80);
+                                UIManager.updateProgress(progress, `Importazione ${i + 1} di ${totalMaterials}...`);
 
-                            for (const meta of allData.materials) {
                                 if (meta.attachments?.length > 0) {
-                                    for (let i = 0; i < meta.attachments.length; i++) {
-                                        const attMeta = meta.attachments[i];
+                                    for (let j = 0; j < meta.attachments.length; j++) {
+                                        const attMeta = meta.attachments[j];
                                         const attFile = zip.file(`allegati/${attMeta.filename}`);
                                         if (attFile) {
                                             const blob = await attFile.async("blob");
-                                            meta.attachments[i] = {
+                                            meta.attachments[j] = {
                                                 description: attMeta.description,
                                                 file: new File([blob], attMeta.filename, { type: attMeta.type })
                                             };
@@ -1817,6 +1889,7 @@
                             UIManager.showNotification('Errore importazione. File non valido.', true);
                         } finally {
                             UIManager.importFile.value = '';
+                            setTimeout(() => UIManager.hideProgressModal(), 500);
                         }
                     }
                 });
@@ -1983,5 +2056,4 @@
     </script>
 </body>
 </html>
-
 
