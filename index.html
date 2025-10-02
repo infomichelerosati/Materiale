@@ -1270,7 +1270,7 @@
                     const qr = qrcode(0, 'L');
                     qr.addData(material.id);
                     qr.make();
-                    this.qrCodeContainer.innerHTML = qr.createImgTag(6, 8);
+                    this.qrCodeContainer.innerHTML = qr.createImgTag(3, 4);
                     
                     this.modalBackdrop.classList.remove('hidden');
                     this.qrCodeModal.classList.remove('hidden');
@@ -1976,5 +1976,6 @@
     </script>
 </body>
 </html>
+
 
 
